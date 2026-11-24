@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventario Local Escáner</title>
+    <title>Inventario Escáner Nube</title>
     <style>
         :root {
             --primary: #1a73e8;
@@ -45,6 +45,15 @@
         header h1 {
             font-size: 1.2rem;
             font-weight: 600;
+        }
+
+        .sync-badge {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 3px 8px;
+            border-radius: 12px;
+            display: inline-block;
+            margin-top: 4px;
         }
 
         .menu-btn {
@@ -212,8 +221,11 @@
 <body>
 
 <header>
-    <h1 id="headerTitle">Registro de Productos</h1>
-    <button class="menu-btn" id="toggleViewBtn" title="Ver Inventario General">&#9776;</button>
+    <div>
+        <h1 id="headerTitle">Registro de Productos</h1>
+        <span id="syncStatus" class="sync-badge">🟡 Conectando a la nube...</span>
+    </div>
+    <button class="menu-btn" id="toggleViewBtn" title="Ver Inventario General">☰</button>
 </header>
 
 <div class="container" id="scannerView">
@@ -276,16 +288,47 @@
     </div>
 </div>
 
-<script>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBfyGKd7pftSoOhr2BI7Pb4oCvdUWs3wcU",
+        authDomain: "inventario-local-3e56a.firebaseapp.com",
+        databaseURL: "https://inventario-local-3e56a-default-rtdb.firebaseio.com",
+        projectId: "inventario-local-3e56a",
+        storageBucket: "inventario-local-3e56a.firebasestorage.app",
+        messagingSenderId: "106634865872",
+        appId: "1:106634865872:web:b696829c1ab431ca9202d5"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const inventarioRef = ref(db, 'inventario');
+
     let videoStream = null;
     let scanInterval = null;
     let isScanning = false;
-    const STORAGE_KEY = 'mi_inventario_local_gt';
+    let inventarioCache = [];
 
     const toggleViewBtn = document.getElementById('toggleViewBtn');
     const scannerView = document.getElementById('scannerView');
     const inventoryView = document.getElementById('inventoryView');
     const headerTitle = document.getElementById('headerTitle');
+    const syncStatus = document.getElementById('syncStatus');
+
+    onValue(inventarioRef, (snapshot) => {
+        const data = snapshot.val();
+        inventarioCache = data ? (Array.isArray(data) ? data.filter(Boolean) : Object.values(data)) : [];
+        syncStatus.textContent = "🟢 Sincronizado en la nube";
+        
+        if (!inventoryView.classList.contains('hidden')) {
+            renderizarInventarioGeneral();
+        }
+    }, (error) => {
+        console.error(error);
+        syncStatus.textContent = "🔴 Error de conexión";
+    });
 
     toggleViewBtn.addEventListener('click', () => {
         if (isScanning) detenerEscaner();
@@ -295,17 +338,17 @@
             scannerView.classList.add('hidden');
             inventoryView.classList.remove('hidden');
             headerTitle.textContent = 'Inventario General';
-            toggleViewBtn.innerHTML = '&#10005;';
+            toggleViewBtn.innerHTML = '✕';
             renderizarInventarioGeneral();
         } else {
             inventoryView.classList.add('hidden');
             scannerView.classList.remove('hidden');
             headerTitle.textContent = 'Registro de Productos';
-            toggleViewBtn.innerHTML = '&#9776;';
+            toggleViewBtn.innerHTML = '☰';
         }
     });
 
-    async function iniciarEscaner() {
+    window.iniciarEscaner = async function() {
         const statusMsg = document.getElementById('scanStatus');
         const video = document.getElementById('videoPreview');
         const container = document.getElementById('scannerContainer');
@@ -346,12 +389,12 @@
             }, 300);
 
         } catch (err) {
-            statusMsg.textContent = "Error al acceder a la cámara. Asegúrate de dar permisos y abrir en un servidor seguro (HTTPS/localhost).";
+            statusMsg.textContent = "Error al acceder a la cámara. Asegúrate de dar permisos y abrir en HTTPS.";
             detenerEscaner();
         }
-    }
+    };
 
-    function detenerEscaner() {
+    window.detenerEscaner = function() {
         isScanning = false;
         if (scanInterval) {
             clearInterval(scanInterval);
@@ -364,7 +407,7 @@
         document.getElementById('scannerContainer').classList.add('hidden');
         document.getElementById('startScanBtn').classList.remove('hidden');
         document.getElementById('stopScanBtn').classList.add('hidden');
-    }
+    };
 
     function onScanSuccess(decodedText) {
         detenerEscaner();
@@ -382,12 +425,7 @@
         }
     }
 
-    function obtenerInventario() {
-        const datos = localStorage.getItem(STORAGE_KEY);
-        return datos ? JSON.parse(datos) : [];
-    }
-
-    function buscarEnInventarioLocal() {
+    window.buscarEnInventarioLocal = function() {
         const code = document.getElementById('barcode').value.trim();
         const size = document.getElementById('productSize').value;
         const alertBox = document.getElementById('existingAlert');
@@ -397,8 +435,7 @@
             return false;
         }
 
-        const inventario = obtenerInventario();
-        const exacto = inventario.find(item => item.barcode === code && item.size === size);
+        const exacto = inventarioCache.find(item => item.barcode === code && item.size === size);
 
         if (exacto) {
             document.getElementById('productName').value = exacto.name;
@@ -410,7 +447,7 @@
             return true;
         }
 
-        const mismoCodigo = inventario.find(item => item.barcode === code);
+        const mismoCodigo = inventarioCache.find(item => item.barcode === code);
         if (mismoCodigo) {
             document.getElementById('productName').value = mismoCodigo.name;
             document.getElementById('productPrice').value = "";
@@ -423,9 +460,9 @@
 
         alertBox.style.display = 'none';
         return false;
-    }
+    };
 
-    function guardarProducto(e) {
+    window.guardarProducto = async function(e) {
         e.preventDefault();
 
         const barcode = document.getElementById('barcode').value.trim();
@@ -437,7 +474,7 @@
         const cleanName = rawName.replace(/\s*\((Pequeño|Mediano|Grande)\)$/i, '');
         const fullNameWithAdjective = `${cleanName} (${size})`;
 
-        let inventario = obtenerInventario();
+        let inventario = [...inventarioCache];
         const index = inventario.findIndex(item => item.barcode === barcode && item.size === size);
 
         const productoObj = {
@@ -455,52 +492,72 @@
             inventario.push(productoObj);
         }
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(inventario));
-
-        alert(`✅ Guardado correctamente:
+        try {
+            syncStatus.textContent = "🟡 Guardando en la nube...";
+            await set(inventarioRef, inventario);
+            alert(`✅ Guardado en la nube:
 ${fullNameWithAdjective}
 Cantidad confirmada: ${qty}
 Precio: Q${price.toFixed(2)}`);
-        
-        document.getElementById('productForm').reset();
-        document.getElementById('existingAlert').style.display = 'none';
-        document.getElementById('scanStatus').textContent = "";
-    }
+            
+            document.getElementById('productForm').reset();
+            document.getElementById('existingAlert').style.display = 'none';
+            document.getElementById('scanStatus').textContent = "";
+        } catch (err) {
+            alert("❌ Error al guardar en la nube. Verifica tu conexión a internet.");
+            console.error(err);
+        }
+    };
+
+    window.limpiarInventario = async function() {
+        if (confirm("⚠️ ¿Estás seguro de borrar TODO el inventario en la nube? Esto afectará a todos los dispositivos.")) {
+            try {
+                await set(inventarioRef, []);
+            } catch (err) {
+                alert("❌ Error al borrar el inventario.");
+            }
+        }
+    };
 
     function renderizarInventarioGeneral() {
         const container = document.getElementById('inventoryTableContainer');
-        const inventario = obtenerInventario();
 
-        if (inventario.length === 0) {
+        if (inventarioCache.length === 0) {
             container.innerHTML = `<div class="empty-state">Tu inventario está vacío. Escanea y guarda tu primer producto.</div>`;
             return;
         }
 
         const resumenLineas = {};
-        inventario.forEach(item => {
-            const linea = item.displayName || `${item.name} (${item.size})`;
-            if (!resumenLineas[linea]) {
-                resumenLineas[linea] = 0;
+        inventarioCache.forEach(item => {
+            const key = item.displayName;
+            if (!resumenLineas[key]) {
+                resumenLineas[key] = {
+                    qty: 0,
+                    price: parseFloat(item.price || 0)
+                };
             }
-            resumenLineas[linea] += parseInt(item.qty);
+            resumenLineas[key].qty += parseInt(item.qty || 0);
+            resumenLineas[key].price = parseFloat(item.price || 0);
         });
 
         let html = `
             <table>
                 <thead>
                     <tr>
-                        <th>Línea de Producto</th>
-                        <th style="text-align:right;">Total Unidades</th>
+                        <th>Producto</th>
+                        <th style="text-align:right;">Precio</th>
+                        <th style="text-align:right;">Cant.</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
-        for (const [linea, totalUnidades] of Object.entries(resumenLineas)) {
+        for (const [nombre, datos] of Object.entries(resumenLineas)) {
             html += `
                 <tr>
-                    <td>${linea}</td>
-                    <td class="num">${totalUnidades}</td>
+                    <td>${nombre}</td>
+                    <td style="text-align:right;">Q${datos.price.toFixed(2)}</td>
+                    <td class="num">${datos.qty}</td>
                 </tr>
             `;
         }
@@ -508,14 +565,6 @@ Precio: Q${price.toFixed(2)}`);
         html += `</tbody></table>`;
         container.innerHTML = html;
     }
-
-    function limpiarInventario() {
-        if (confirm("¿Seguro que deseas borrar todo el inventario guardado en este teléfono?")) {
-            localStorage.removeItem(STORAGE_KEY);
-            renderizarInventarioGeneral();
-        }
-    }
 </script>
-
 </body>
 </html>
