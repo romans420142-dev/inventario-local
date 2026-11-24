@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario Local Escáner</title>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --text: #202124;
+            --border: #dadce0;
+            --success: #1e8e3e;
+            --danger: #d93025;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 40px;
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.8rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 5px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 15px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 15px;
+        }
+
+        .scanner-box {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            background: #000;
+            border: 2px dashed var(--border);
+        }
+
+        video {
+            width: 100%;
+            display: block;
+            max-height: 260px;
+            object-fit: cover;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: #ff3b30;
+            box-shadow: 0 0 8px #ff3b30;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 10px;
+        }
+
+        .btn-scan {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-scan:hover { background-color: var(--primary-dark); }
+
+        .btn-stop {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .btn-save {
+            background-color: var(--success);
+            color: white;
+            margin-top: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #5f6368;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: #fff;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .status-msg {
+            font-size: 0.85rem;
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .badge-info {
+            background-color: #e8f0fe;
+            color: #1967d2;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            display: none;
+            line-height: 1.4;
+        }
+
+        .hidden { display: none !important; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #5f6368;
+            font-weight: 600;
+        }
+
+        td.num {
+            text-align: right;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #80868b;
+            padding: 30px 0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1 id="headerTitle">Registro de Productos</h1>
+    <button class="menu-btn" id="toggleViewBtn" title="Ver Inventario General">&#9776;</button>
+</header>
+
+<div class="container" id="scannerView">
+    <div class="card">
+        <div id="scannerContainer" class="scanner-box hidden">
+            <video id="videoPreview" playsinline autoplay muted></video>
+            <div class="scan-line"></div>
+        </div>
+
+        <button class="btn btn-scan" id="startScanBtn" onclick="iniciarEscaner()">📷 Escanear Código de Barras</button>
+        <button class="btn btn-stop hidden" id="stopScanBtn" onclick="detenerEscaner()">⏹ Detener Cámara</button>
+        <p class="status-msg" id="scanStatus"></p>
+
+        <div id="existingAlert" class="badge-info"></div>
+
+        <form id="productForm" onsubmit="guardarProducto(event)">
+            <div class="form-group">
+                <label for="barcode">Código de Barras</label>
+                <input type="text" id="barcode" placeholder="Escanea o ingresa el código" required oninput="buscarEnInventarioLocal()">
+            </div>
+
+            <div class="form-group">
+                <label for="productName">Nombre del Producto (Editable)</label>
+                <input type="text" id="productName" placeholder="Escribe el nombre del producto" required>
+            </div>
+
+            <div class="form-group">
+                <label for="productSize">Tamaño (Se agregará al nombre)</label>
+                <select id="productSize" onchange="buscarEnInventarioLocal()">
+                    <option value="Pequeño">Pequeño</option>
+                    <option value="Mediano" selected>Mediano</option>
+                    <option value="Grande">Grande</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="productPrice">Precio Unitario (Q - Quetzales)</label>
+                <input type="number" id="productPrice" step="0.01" min="0" placeholder="0.00" required>
+            </div>
+
+            <div class="form-group">
+                <label for="productQty">Cantidad Existente a Confirmar</label>
+                <input type="number" id="productQty" min="0" value="1" required>
+            </div>
+
+            <button type="submit" class="btn btn-save">💾 Guardar Información</button>
+        </form>
+    </div>
+</div>
+
+<div class="container hidden" id="inventoryView">
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h2 style="font-size:1.1rem;">Existencias por Línea</h2>
+            <button onclick="limpiarInventario()" style="background:none; border:none; color:#d93025; font-size:0.85rem; cursor:pointer;">Borrar Todo</button>
+        </div>
+        <p style="font-size:0.85rem; color:#5f6368; margin-bottom:10px;">Total de unidades existentes por cada línea de producto.</p>
+        
+        <div id="inventoryTableContainer"></div>
+    </div>
+</div>
+
+<script>
+    let videoStream = null;
+    let scanInterval = null;
+    let isScanning = false;
+    const STORAGE_KEY = 'mi_inventario_local_gt';
+
+    const toggleViewBtn = document.getElementById('toggleViewBtn');
+    const scannerView = document.getElementById('scannerView');
+    const inventoryView = document.getElementById('inventoryView');
+    const headerTitle = document.getElementById('headerTitle');
+
+    toggleViewBtn.addEventListener('click', () => {
+        if (isScanning) detenerEscaner();
+        
+        const isInventoryHidden = inventoryView.classList.contains('hidden');
+        if (isInventoryHidden) {
+            scannerView.classList.add('hidden');
+            inventoryView.classList.remove('hidden');
+            headerTitle.textContent = 'Inventario General';
+            toggleViewBtn.innerHTML = '&#10005;';
+            renderizarInventarioGeneral();
+        } else {
+            inventoryView.classList.add('hidden');
+            scannerView.classList.remove('hidden');
+            headerTitle.textContent = 'Registro de Productos';
+            toggleViewBtn.innerHTML = '&#9776;';
+        }
+    });
+
+    async function iniciarEscaner() {
+        const statusMsg = document.getElementById('scanStatus');
+        const video = document.getElementById('videoPreview');
+        const container = document.getElementById('scannerContainer');
+
+        if (!('BarcodeDetector' in window)) {
+            statusMsg.textContent = "⚠️ Tu navegador no soporta escáner nativo offline. Usa Chrome en Android o ingresa el código manualmente.";
+            return;
+        }
+
+        try {
+            videoStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }
+            });
+            video.srcObject = videoStream;
+            await video.play();
+
+            container.classList.remove('hidden');
+            document.getElementById('startScanBtn').classList.add('hidden');
+            document.getElementById('stopScanBtn').classList.remove('hidden');
+            statusMsg.textContent = "Apunta la cámara al código de barras...";
+            isScanning = true;
+
+            const barcodeDetector = new BarcodeDetector({
+                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code']
+            });
+
+            scanInterval = setInterval(async () => {
+                if (!isScanning || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        const code = barcodes[0].rawValue;
+                        onScanSuccess(code);
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            }, 300);
+
+        } catch (err) {
+            statusMsg.textContent = "Error al acceder a la cámara. Asegúrate de dar permisos y abrir en un servidor seguro (HTTPS/localhost).";
+            detenerEscaner();
+        }
+    }
+
+    function detenerEscaner() {
+        isScanning = false;
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+        }
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            videoStream = null;
+        }
+        document.getElementById('scannerContainer').classList.add('hidden');
+        document.getElementById('startScanBtn').classList.remove('hidden');
+        document.getElementById('stopScanBtn').classList.add('hidden');
+    }
+
+    function onScanSuccess(decodedText) {
+        detenerEscaner();
+        document.getElementById('barcode').value = decodedText;
+        
+        const encontrado = buscarEnInventarioLocal();
+        if (encontrado) {
+            document.getElementById('scanStatus').textContent = "✅ Producto reconocido de tu inventario.";
+        } else {
+            document.getElementById('productName').value = "";
+            document.getElementById('productPrice').value = "";
+            document.getElementById('productQty').value = 1;
+            document.getElementById('scanStatus').textContent = "🆕 Código nuevo. Ingresa sus datos para registrarlo.";
+            document.getElementById('productName').focus();
+        }
+    }
+
+    function obtenerInventario() {
+        const datos = localStorage.getItem(STORAGE_KEY);
+        return datos ? JSON.parse(datos) : [];
+    }
+
+    function buscarEnInventarioLocal() {
+        const code = document.getElementById('barcode').value.trim();
+        const size = document.getElementById('productSize').value;
+        const alertBox = document.getElementById('existingAlert');
+
+        if (!code) {
+            alertBox.style.display = 'none';
+            return false;
+        }
+
+        const inventario = obtenerInventario();
+        const exacto = inventario.find(item => item.barcode === code && item.size === size);
+
+        if (exacto) {
+            document.getElementById('productName').value = exacto.name;
+            document.getElementById('productPrice').value = exacto.price;
+            document.getElementById('productQty').value = exacto.qty;
+            
+            alertBox.style.display = 'block';
+            alertBox.innerHTML = `📌 <b>Registro encontrado:</b> "${exacto.displayName}"<br>Existencia actual: <b>${exacto.qty}</b> | Precio: <b>Q${parseFloat(exacto.price).toFixed(2)}</b>.<br>Modifica los campos para actualizar.`;
+            return true;
+        }
+
+        const mismoCodigo = inventario.find(item => item.barcode === code);
+        if (mismoCodigo) {
+            document.getElementById('productName').value = mismoCodigo.name;
+            document.getElementById('productPrice').value = "";
+            document.getElementById('productQty').value = 1;
+
+            alertBox.style.display = 'block';
+            alertBox.innerHTML = `ℹ️ Producto conocido: <b>${mismoCodigo.name}</b>.<br>Registrando nueva variante tamaño <b>${size}</b>.`;
+            return true;
+        }
+
+        alertBox.style.display = 'none';
+        return false;
+    }
+
+    function guardarProducto(e) {
+        e.preventDefault();
+
+        const barcode = document.getElementById('barcode').value.trim();
+        const rawName = document.getElementById('productName').value.trim();
+        const size = document.getElementById('productSize').value;
+        const price = parseFloat(document.getElementById('productPrice').value);
+        const qty = parseInt(document.getElementById('productQty').value);
+
+        const cleanName = rawName.replace(/\s*\((Pequeño|Mediano|Grande)\)$/i, '');
+        const fullNameWithAdjective = `${cleanName} (${size})`;
+
+        let inventario = obtenerInventario();
+        const index = inventario.findIndex(item => item.barcode === barcode && item.size === size);
+
+        const productoObj = {
+            barcode: barcode,
+            name: cleanName,
+            displayName: fullNameWithAdjective,
+            size: size,
+            price: price,
+            qty: qty
+        };
+
+        if (index !== -1) {
+            inventario[index] = productoObj;
+        } else {
+            inventario.push(productoObj);
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(inventario));
+
+        alert(`✅ Guardado correctamente:
+${fullNameWithAdjective}
+Cantidad confirmada: ${qty}
+Precio: Q${price.toFixed(2)}`);
+        
+        document.getElementById('productForm').reset();
+        document.getElementById('existingAlert').style.display = 'none';
+        document.getElementById('scanStatus').textContent = "";
+    }
+
+    function renderizarInventarioGeneral() {
+        const container = document.getElementById('inventoryTableContainer');
+        const inventario = obtenerInventario();
+
+        if (inventario.length === 0) {
+            container.innerHTML = `<div class="empty-state">Tu inventario está vacío. Escanea y guarda tu primer producto.</div>`;
+            return;
+        }
+
+        const resumenLineas = {};
+        inventario.forEach(item => {
+            const linea = item.displayName || `${item.name} (${item.size})`;
+            if (!resumenLineas[linea]) {
+                resumenLineas[linea] = 0;
+            }
+            resumenLineas[linea] += parseInt(item.qty);
+        });
+
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Línea de Producto</th>
+                        <th style="text-align:right;">Total Unidades</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (const [linea, totalUnidades] of Object.entries(resumenLineas)) {
+            html += `
+                <tr>
+                    <td>${linea}</td>
+                    <td class="num">${totalUnidades}</td>
+                </tr>
+            `;
+        }
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    }
+
+    function limpiarInventario() {
+        if (confirm("¿Seguro que deseas borrar todo el inventario guardado en este teléfono?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            renderizarInventarioGeneral();
+        }
+    }
+</script>
+
+</body>
+</html>
